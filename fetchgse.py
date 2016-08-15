@@ -41,30 +41,32 @@ def parse_soft(softzip):
 	# Get platform title
             line = line.strip()
             if line.startswith("!Series_title"):
-                results["title"] = line.replace("!Series_title", "")
+                results["title"] = line.replace("!Series_title", "").strip()
+            if line.startswith("!Series_pubmed_id"):
+                results["pubmed"] = line.replace("!Series_pubmed_id", "").strip()
             if line.startswith('!Series_platform_id'):
                 index = line.replace('!Series_platform_id', "")
                 platform = line
             if line.startswith('!Series_supplementary_file'):
-                index = line.replace('!Series_supplementary_file', "")
-                suppfiles.append(line.strip())
+                fn = line.replace('!Series_supplementary_file', "").strip()
+                suppfiles.append(fn)
             if line.startswith('!Sample_title'):
-                results['samples'] = line.replace("\"", "").split("\t")[1:]
+                results['samples'] = line.replace("\"", "").strip().split("\t")[1:]
             if line.startswith('!Sample_geo_accession'):
                 results['samples_geo'] = line.split("\t")[1:]
             if line.startswith('!Sample_characteristics_ch1'):
                 values = line.replace("\"", "").split("\t")[1:]
-                colmeta.append(values[1].split(": ")[0].replace(" ", "_"))
-                values = [v.split(": ")[1] for v in values]
+                colmeta.append(values[1].split(": ")[0].replace(" ", "_").strip())
+                values = [v.split(": ")[-1].strip() for v in values]
                 metadata.append(values)
             if line.startswith('!series_matrix_table_begin'):
                 line = z.next().strip()
-                results['header'] = line.replace("\"", "").split()
+                results['header'] = line.replace("\"", "").strip().split()
                 line = z.next().strip()
                 results['table'] = list()
                 while not line.startswith("!series_matrix_table_end"):
-                    results['table'].append(line.replace("\"", "").split())
-                    line = z.next()
+                    results['table'].append(line.replace("\"", "").strip().split("\t"))
+                    line = z.next().strip()
         results['meta_header'] = colmeta
         results['metadata'] = metadata
 	results['platform'] = platform.strip()
@@ -87,10 +89,15 @@ def write_data(res):
     df = pd.DataFrame(res['table'], columns=res['header'])
     table_fn = "expression.csv"
     df.to_csv(table_fn, index=False)
-    df = pd.DataFrame(res['metadata'], index=res['meta_header'], columns=res['samples']).T
+    df = pd.DataFrame(res['metadata'], index=res['meta_header'], columns=res['header'][1:]).T
     table_fn = "metadata.csv"
     df.to_csv(table_fn)
-    return None
+    desc_fn = "description.txt"
+    with open(desc_fn, 'w') as inh:
+        print >>inh, "Title: %s" % res['title']
+        print >>inh, "Platform: %s" % res['platform']
+        print >>inh, "Pubmed: %s" % res.get('pubmed', "None")
+        print >>inh, "Sups: %s" % ",".join(res['suppfiles'])
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Download GSE data")
